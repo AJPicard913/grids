@@ -1,24 +1,17 @@
-//
-//  ContentView.swift
-//  Grid
-//
-//  Created by AJ Picard on 7/31/25.
-//
-
 import SwiftUI
+import CoreData
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationView {
+            HomeView()
         }
-        .padding()
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+            .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    }
 }

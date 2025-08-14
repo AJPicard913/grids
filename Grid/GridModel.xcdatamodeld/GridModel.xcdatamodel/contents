@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23788.4" systemVersion="24G5065c" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="Grid" representedClassName="Grid" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="size_" optional="YES" attributeType="String"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="type" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="items" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GridItem" inverseName="grid" inverseEntity="GridItem"/>
+        <relationship name="space" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Space" inverseName="grids" inverseEntity="Space"/>
+    </entity>
+    <entity name="GridItem" representedClassName="GridItem" syncable="YES" codeGenerationType="class">
+        <attribute name="content" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="imageData" optional="YES" attributeType="Binary"/>
+        <attribute name="isCompleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="type" optional="YES" attributeType="String"/>
+        <relationship name="assignee" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Member" inverseName="assignedTasks" inverseEntity="Member"/>
+        <relationship name="grid" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Grid" inverseName="items" inverseEntity="Grid"/>
+    </entity>
+    <entity name="Member" representedClassName="Member" syncable="YES" codeGenerationType="class">
+        <attribute name="email" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isOwner" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="joinedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <relationship name="assignedTasks" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GridItem" inverseName="assignee" inverseEntity="GridItem"/>
+        <relationship name="space" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Space" inverseName="members" inverseEntity="Space"/>
+    </entity>
+    <entity name="Space" representedClassName="Space" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <relationship name="grids" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Grid" inverseName="space" inverseEntity="Grid"/>
+        <relationship name="members" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Member" inverseName="space" inverseEntity="Member"/>
+    </entity>
+</model>

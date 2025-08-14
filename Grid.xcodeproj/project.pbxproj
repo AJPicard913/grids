@@ -29,9 +29,38 @@
 		40BE14152E3C0E0800C901C5 /* GridUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GridUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		402935A92E3C1CE000787446 /* Exceptions for "Grid" folder in "Grid" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 40BE13FD2E3C0E0600C901C5 /* Grid */;
+		};
+		40BE14342E3C0FE200C901C5 /* Exceptions for "Grid" folder in "GridTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				GridModel.xcdatamodeld,
+			);
+			target = 40BE140A2E3C0E0800C901C5 /* GridTests */;
+		};
+		40BE14352E3C0FE200C901C5 /* Exceptions for "Grid" folder in "GridUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				GridModel.xcdatamodeld,
+			);
+			target = 40BE14142E3C0E0800C901C5 /* GridUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		40BE14002E3C0E0600C901C5 /* Grid */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				402935A92E3C1CE000787446 /* Exceptions for "Grid" folder in "Grid" target */,
+				40BE14342E3C0FE200C901C5 /* Exceptions for "Grid" folder in "GridTests" target */,
+				40BE14352E3C0FE200C901C5 /* Exceptions for "Grid" folder in "GridUITests" target */,
+			);
 			path = Grid;
 			sourceTree = "<group>";
 		};
@@ -395,11 +424,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Grid/Grid.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = N7AL96QZCQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Grid/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -423,11 +454,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Grid/Grid.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = N7AL96QZCQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Grid/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
