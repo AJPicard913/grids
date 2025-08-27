@@ -37,14 +37,14 @@
 			);
 			target = 40BE13FD2E3C0E0600C901C5 /* Grid */;
 		};
-		40BE14342E3C0FE200C901C5 /* Exceptions for "Grid" folder in "GridTests" target */ = {
+		403AC4042E5795EE0045459E /* Exceptions for "Grid" folder in "GridTests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				GridModel.xcdatamodeld,
 			);
 			target = 40BE140A2E3C0E0800C901C5 /* GridTests */;
 		};
-		40BE14352E3C0FE200C901C5 /* Exceptions for "Grid" folder in "GridUITests" target */ = {
+		403AC4052E5795EE0045459E /* Exceptions for "Grid" folder in "GridUITests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				GridModel.xcdatamodeld,
@@ -58,8 +58,8 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				402935A92E3C1CE000787446 /* Exceptions for "Grid" folder in "Grid" target */,
-				40BE14342E3C0FE200C901C5 /* Exceptions for "Grid" folder in "GridTests" target */,
-				40BE14352E3C0FE200C901C5 /* Exceptions for "Grid" folder in "GridUITests" target */,
+				403AC4042E5795EE0045459E /* Exceptions for "Grid" folder in "GridTests" target */,
+				403AC4052E5795EE0045459E /* Exceptions for "Grid" folder in "GridUITests" target */,
 			);
 			path = Grid;
 			sourceTree = "<group>";

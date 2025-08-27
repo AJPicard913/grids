@@ -5,18 +5,23 @@ struct HomeView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \Space.createdAt, ascending: false)],
-        animation: .default)
+        animation: .default
+    )
     private var spaces: FetchedResults<Space>
     
     @State private var selectedSpaceIndex = 0
     @State private var isEditMode = false
     @State private var showingSpaceSelector = false
-    @State private var showingCreateGrid = false
+    @State private var showingCreateSpace = false
+    @State private var showingCreateItem = false
     @State private var selectedTab = "home"
+    @AppStorage("lastSelectedSpaceID") private var lastSelectedSpaceID: String = ""
     
-    // New state for size selection popover
-    @State private var showingSizePopover = false
-    @State private var gridForSizeSelection: Grid?
+    // Trigger view updates after size changes
+    @State private var layoutTrigger = false
+    
+    // Namespace for matched geometry animations
+    @Namespace private var ns
     
     private var currentSpace: Space? {
         guard !spaces.isEmpty else { return nil }
@@ -26,141 +31,214 @@ struct HomeView: View {
     private var grids: [Grid] {
         guard let space = currentSpace else { return [] }
         let set = space.grids as? Set<Grid> ?? []
-        return set.sorted { ($0.createdAt ?? Date.distantPast) > ($1.createdAt ?? Date.distantPast) }
+        return set.sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
     }
     
+    // Stable ID for matchedGeometryEffect
+    private func mgeID(for grid: Grid) -> String {
+        if let id = grid.id?.uuidString { return id }
+        return grid.objectID.uriRepresentation().absoluteString
+    }
+    
+    // Sizes are user-controlled only. Default to .small if not set.
     private func gridSize(for grid: Grid) -> BentoSize {
-        // Use the size_ attribute from the Grid entity
-        guard let sizeString = grid.size_ else {
-            // Fallback logic if size_ is not set
-            let itemCount = (grid.items as? Set<GridItem>)?.count ?? 0
-            switch grid.type {
-            case "media":
-                return .large
-            case "notes":
-                return itemCount > 5 ? .medium : .small
-            default:
-                return itemCount > 10 ? .large : (itemCount > 3 ? .medium : .small)
-            }
-        }
-        
-        // Map the string value to BentoSize
-        switch sizeString.lowercased() {
-        case "small":
-            return .small
-        case "large":
-            return .large
-        default:
-            return .medium
+        guard let sizeString = grid.size_?.lowercased() else { return .small }
+        switch sizeString {
+        case "small":  return .small
+        case "medium": return .medium
+        case "large":  return .large
+        default:       return .small
         }
     }
     
-    // Replace the adaptiveGridView with a proper 2-column implementation
-    private func adaptiveGridView(geometry: GeometryProxy) -> some View {
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                let gridWidth = (geometry.size.width - 40 - 16) / 2  // Accounting for padding and spacing
-                let rows = createGridRows(grids: grids)
-                
-                ForEach(rows.indices, id: \.self) { index in
-                    let row = rows[index]
-                    HStack(spacing: 16) {
-                        ForEach(row.grids, id: \.id) { grid in
-                            AdaptiveGridCard(grid: grid, isEditMode: isEditMode, width: row.type == .fullWidth ? (gridWidth * 2 + 16) : gridWidth)
-                                .onLongPressGesture(minimumDuration: 0.5) {
-                                    gridForSizeSelection = grid
-                                    showingSizePopover = true
-                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                                    impactFeedback.impactOccurred()
-                                }
-                                .modifier(ShakeEffect(animatableData: isEditMode ? 1 : 0))
-                        }
-                        
-                        // Add spacer for single item rows
-                        if row.grids.count == 1 && row.type != .fullWidth {
-                            Spacer()
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-        .animation(.spring(), value: isEditMode)
-        .onTapGesture {
-            if isEditMode {
-                withAnimation(.spring()) {
-                    isEditMode = false
-                }
-            }
-        }
-        .popover(isPresented: $showingSizePopover, attachmentAnchor: .point(.top), arrowEdge: .top) {
-            if let grid = gridForSizeSelection {
-                SizeSelectionPopover(grid: grid, onSave: { newSize in
-                    updateGridSize(grid: grid, to: newSize)
-                    showingSizePopover = false
-                    gridForSizeSelection = nil
-                }, onCancel: {
-                    showingSizePopover = false
-                    gridForSizeSelection = nil
-                })
-            }
-        }
-    }
-    
-    // Function to group grids into rows based on their sizes
-    private func createGridRows(grids: [Grid]) -> [GridRow] {
-        var rows: [GridRow] = []
-        var currentRowGrids: [Grid] = []
-        
-        for grid in grids {
-            let size = gridSize(for: grid)
-            
-            // If we have a large grid or the current row already has 2 items, start a new row
-            if size == .large || currentRowGrids.count >= 2 {
-                if !currentRowGrids.isEmpty {
-                    rows.append(GridRow(grids: currentRowGrids, type: .normal))
-                    currentRowGrids = []
-                }
-            }
-            
-            // Add large grids on their own row
-            if size == .large {
-                rows.append(GridRow(grids: [grid], type: .fullWidth))
-            } else {
-                currentRowGrids.append(grid)
-            }
-        }
-        
-        // Add remaining grids to the last row
-        if !currentRowGrids.isEmpty {
-            rows.append(GridRow(grids: currentRowGrids, type: .normal))
-        }
-        
-        return rows
-    }
-    
-    // Function to update grid size
-    private func updateGridSize(grid: Grid, to size: BentoSize) {
+    // Save size, then explicitly animate the layout change (with haptic)
+    private func updateGridSizeWithRefresh(grid: Grid, to size: BentoSize) {
         let sizeString: String
         switch size {
-        case .small:
-            sizeString = "small"
-        case .medium:
-            sizeString = "medium"
-        case .large:
-            sizeString = "large"
+        case .small:  sizeString = "small"
+        case .medium: sizeString = "medium"
+        case .large:  sizeString = "large"
         }
+        
+        // Haptic when the user commits to a new size
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         
         grid.size_ = sizeString
         grid.updatedAt = Date()
         
         do {
             try viewContext.save()
+            withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.9, blendDuration: 0.25)) {
+                layoutTrigger.toggle()
+            }
         } catch {
             print("Error saving grid size: \(error)")
         }
     }
+
+    private func persistCurrentSelection() {
+        if let space = currentSpace, let id = space.id?.uuidString {
+            lastSelectedSpaceID = id
+        } else {
+            lastSelectedSpaceID = ""
+        }
+    }
+
+    private func restoreSelectionFromSavedID() {
+        guard !spaces.isEmpty else { return }
+        if let saved = UUID(uuidString: lastSelectedSpaceID),
+           let idx = spaces.firstIndex(where: { $0.id == saved }) {
+            if selectedSpaceIndex != idx {
+                selectedSpaceIndex = idx
+            }
+        } else {
+            // Default to first and persist it so future launches are stable
+            selectedSpaceIndex = 0
+            if let firstID = spaces.first?.id?.uuidString {
+                lastSelectedSpaceID = firstID
+            }
+        }
+    }
     
+    // MARK: - Adaptive Grid
+    private func adaptiveGridView(geometry: GeometryProxy) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                let horizontalPadding: CGFloat = 20
+                let interItemSpacing: CGFloat = 16
+                let fullWidth = geometry.size.width - (horizontalPadding * 2)
+                let halfWidth = (fullWidth - interItemSpacing) / 2
+
+                // Heights: small (1x1), medium (1x2), large (2x2 full width)
+                let smallHeight: CGFloat = 120
+                let mediumHeight: CGFloat = smallHeight * 2 + interItemSpacing
+                let largeHeight: CGFloat = 260
+
+                let sections = buildGridSections(from: grids)
+
+                ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                    switch section {
+                    case .large(let g):
+                        card(for: g, width: fullWidth, height: largeHeight)
+
+                    case .flow(let items):
+                        let columns = flowColumns(for: items, smallHeight: smallHeight, mediumHeight: mediumHeight, spacing: interItemSpacing)
+                        // was: HStack(spacing: interItemSpacing) {
+                        HStack(alignment: .top, spacing: interItemSpacing) {
+                            LazyVStack(spacing: interItemSpacing) {
+                                ForEach(columns.left, id: \.objectID) { g in
+                                    let height = (gridSize(for: g) == .medium) ? mediumHeight : smallHeight
+                                    card(for: g, width: halfWidth, height: height)
+                                }
+                            }
+                            LazyVStack(spacing: interItemSpacing) {
+                                ForEach(columns.right, id: \.objectID) { g in
+                                    let height = (gridSize(for: g) == .medium) ? mediumHeight : smallHeight
+                                    card(for: g, width: halfWidth, height: height)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                }
+            }
+            .padding(.top, 16)         
+            .padding(.horizontal, 20)
+        }
+        .onChange(of: layoutTrigger) { _ in
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        .onTapGesture {
+            if isEditMode {
+                withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.9, blendDuration: 0.25)) {
+                    isEditMode = false
+                }
+            }
+        }
+        .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.9, blendDuration: 0.25), value: isEditMode)
+        .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.9, blendDuration: 0.25), value: layoutTrigger)
+    }
+
+    private enum GridSection {
+        case large(Grid)
+        case flow([Grid]) // smalls + mediums (1x2)
+    }
+
+    private func buildGridSections(from items: [Grid]) -> [GridSection] {
+        var sections: [GridSection] = []
+        var buffer: [Grid] = []
+
+        for g in items {
+            switch gridSize(for: g) {
+            case .large:
+                if !buffer.isEmpty { sections.append(.flow(buffer)); buffer.removeAll() }
+                sections.append(.large(g))
+            case .medium, .small:
+                buffer.append(g)
+            }
+        }
+        if !buffer.isEmpty { sections.append(.flow(buffer)) }
+        return sections
+    }
+
+    private func flowColumns(for items: [Grid], smallHeight: CGFloat, mediumHeight: CGFloat, spacing: CGFloat) -> (left: [Grid], right: [Grid]) {
+        var left: [Grid] = []
+        var right: [Grid] = []
+        var leftHeight: CGFloat = 0
+        var rightHeight: CGFloat = 0
+
+        for g in items {
+            let h = (gridSize(for: g) == .medium) ? mediumHeight : smallHeight
+            if leftHeight <= rightHeight {
+                left.append(g)
+                leftHeight += h + spacing
+            } else {
+                right.append(g)
+                rightHeight += h + spacing
+            }
+        }
+        return (left, right)
+    }
+
+    // Extracted builder: applies matched geometry + haptics + your existing context menu (unchanged)
+    private func card(for g: Grid, width: CGFloat, height: CGFloat) -> some View {
+        AdaptiveGridCard(
+            grid: g,
+            isEditMode: isEditMode,
+            width: width,
+            height: height
+        )
+        .matchedGeometryEffect(id: mgeID(for: g), in: ns)
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.5) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+        .contextMenu {
+            Button("Small (1x1)")  { updateGridSizeWithRefresh(grid: g, to: .small) }
+            Button("Medium (1x2)") { updateGridSizeWithRefresh(grid: g, to: .medium) }
+            Button("Large (2x2)")  { updateGridSizeWithRefresh(grid: g, to: .large) }
+            Button("Delete Grid Widget", role: .destructive) { deleteGrid(g) }
+            Button("Cancel", role: .cancel) { }
+        }
+        .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.9, blendDuration: 0.25), value: width)
+        .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.9, blendDuration: 0.25), value: height)
+        .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.98)),
+                                removal: .opacity))
+    }
+
+    private func deleteGrid(_ grid: Grid) {
+        withAnimation {
+            viewContext.delete(grid)
+            do {
+                try viewContext.save()
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                layoutTrigger.toggle()
+            } catch {
+                print("Error deleting grid: \(error)")
+            }
+        }
+    }
+
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
@@ -172,7 +250,7 @@ struct HomeView: View {
                     emptyStateView
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    adaptiveGridView(geometry: geometry)  // Use adaptive grid instead of bento
+                    adaptiveGridView(geometry: geometry)
                 }
                 
                 Spacer()
@@ -185,17 +263,28 @@ struct HomeView: View {
         }
         .background(Color(UIColor.systemGroupedBackground))
         .sheet(isPresented: $showingSpaceSelector) {
-            SpaceSelectorView(spaces: Array(spaces), selectedIndex: $selectedSpaceIndex, showingCreateGrid: $showingCreateGrid)
+            SpaceSelectorView(spaces: Array(spaces), selectedIndex: $selectedSpaceIndex, showingCreateSpace: $showingCreateSpace)
         }
-        .sheet(isPresented: $showingCreateGrid) {
+        .fullScreenCover(isPresented: $showingCreateSpace) {
+            CreateSpaceView(navigateAfterCreate: false)
+        }
+        .sheet(isPresented: $showingCreateItem) {
             if let space = currentSpace {
                 RichCreateGridView(space: space)
             }
         }
         .onAppear {
             if spaces.isEmpty {
-                showingCreateGrid = true
+                showingCreateSpace = true
+            } else {
+                restoreSelectionFromSavedID()
             }
+        }
+        .onChange(of: selectedSpaceIndex) {
+            persistCurrentSelection()
+        }
+        .onChange(of: spaces.map { $0.id?.uuidString ?? $0.objectID.uriRepresentation().absoluteString }) { _, _ in
+            restoreSelectionFromSavedID()
         }
     }
     
@@ -230,7 +319,6 @@ struct HomeView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                // Always show space selector when tapped, regardless of space count
                 showingSpaceSelector = true
             }
             
@@ -246,7 +334,7 @@ struct HomeView: View {
     
     private var emptyStateView: some View {
         Button {
-            showingCreateGrid = true
+            showingCreateItem = true
         } label: {
             VStack(alignment: .leading) {
                 Image(systemName: "plus.circle.fill")
@@ -317,7 +405,7 @@ struct HomeView: View {
             Spacer()
             
             Button {
-                showingCreateGrid = true
+                showingCreateItem = true
             } label: {
                 Circle()
                     .fill(Color("primaryPurple"))
@@ -330,7 +418,6 @@ struct HomeView: View {
         .animation(.spring(), value: selectedTab)
     }
 }
-
 
 // MARK: - Supporting Views
 
@@ -353,9 +440,17 @@ struct BentoGridCard: View {
     let isEditMode: Bool
     let size: BentoSize
     
+    private var backgroundColor: Color {
+        switch size {
+        case .small:  return Color(red: 0.2902, green: 0.2118, blue: 0.7059) // #4A36B4
+        case .medium: return Color(red: 0.6392, green: 0.5882, blue: 1.0000) // #A396FF
+        case .large:  return Color(red: 0.0824, green: 0.0471, blue: 0.2471) // #150C3F
+        }
+    }
+    
     var body: some View {
         RoundedRectangle(cornerRadius: 20)
-            .fill(Color("primaryPurple"))
+            .fill(backgroundColor)
             .frame(height: cardHeight)
             .overlay(
                 VStack(alignment: .leading, spacing: 8) {
@@ -373,7 +468,7 @@ struct BentoGridCard: View {
                     Spacer()
                 }.padding(16)
             )
-            .shadow(color: Color("primaryPurple").opacity(0.2), radius: 15, x: 0, y: 5)
+            .shadow(color: backgroundColor.opacity(0.2), radius: 15, x: 0, y: 5)
     }
     
     private var cardHeight: CGFloat {
@@ -416,7 +511,6 @@ struct ShakeEffect: GeometryEffect {
         let rotationAngle = sin(animatableData * .pi * 2) * 0.02
         let offsetX = cos(animatableData * .pi * 1.5) * 1
         let offsetY = sin(animatableData * .pi * 1.2) * 1
-        
         let transform = CGAffineTransform(rotationAngle: rotationAngle).translatedBy(x: offsetX, y: offsetY)
         return ProjectionTransform(transform)
     }
@@ -430,85 +524,34 @@ extension Array {
     }
 }
 
-// Data structures for grid rows
-struct GridRow {
-    let grids: [Grid]
-    let type: RowType
-}
-
-enum RowType {
-    case normal, fullWidth
-}
-
-// New views for the adaptive grid
-struct AdaptiveGridRow: View {
-    let grids: [Grid]
-    let isEditMode: Bool
-    let gridWidth: CGFloat
-    let onSizeChange: (Grid) -> Void  // New parameter for size change callback
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            ForEach(grids, id: \.id) { grid in
-                AdaptiveGridCard(grid: grid, isEditMode: isEditMode, width: gridWidth)
-                    .onLongPressGesture {
-                        // Show size selection popover instead of toggling edit mode
-                        onSizeChange(grid)
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                        impactFeedback.impactOccurred()
-                    }
-                    .modifier(ShakeEffect(animatableData: isEditMode ? 1 : 0))
-            }
-            
-            // Add spacing for single item in a row
-            if grids.count == 1 {
-                Spacer()
-            }
-        }
-    }
-}
-
+// MARK: - AdaptiveGridCard (smoothed + per-card haptic on layout)
 struct AdaptiveGridCard: View {
     let grid: Grid
     let isEditMode: Bool
     let width: CGFloat
+    let height: CGFloat
     
     private var size: BentoSize {
-        // Calculate size based on the grid's size_ attribute
-        guard let sizeString = grid.size_ else {
-            let itemCount = (grid.items as? Set<GridItem>)?.count ?? 0
-            switch grid.type {
-            case "media":
-                return .large
-            case "notes":
-                return itemCount > 5 ? .medium : .small
-            default:
-                return itemCount > 10 ? .large : (itemCount > 3 ? .medium : .small)
-            }
-        }
-        
-        switch sizeString.lowercased() {
-        case "small":
-            return .small
-        case "large":
-            return .large
-        default:
-            return .medium
+        // Only reflect user-chosen size; default to .small
+        switch grid.size_?.lowercased() {
+        case "medium": return .medium
+        case "large":  return .large
+        default:       return .small
         }
     }
     
-    private var cardHeight: CGFloat {
+    private var backgroundColor: Color {
         switch size {
-        case .small: return 120
-        case .medium: return 180
-        case .large: return 200  // Slightly shorter for large in adaptive layout
+        case .small:  return Color(red: 0.2902, green: 0.2118, blue: 0.7059) // #4A36B4
+        case .medium: return Color(red: 0.6392, green: 0.5882, blue: 1.0000) // #A396FF
+        case .large:  return Color(red: 0.0824, green: 0.0471, blue: 0.2471) // #150C3F
         }
     }
     
     var body: some View {
         RoundedRectangle(cornerRadius: 20)
-            .fill(Color("primaryPurple"))
-            .frame(width: width, height: cardHeight)
+            .fill(backgroundColor)
+            .frame(width: width, height: height)
             .overlay(
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -524,126 +567,16 @@ struct AdaptiveGridCard: View {
                     }
                     GridPreviewContent(grid: grid, size: size)
                     Spacer()
-                }.padding(16)
+                }
+                .padding(16)
             )
-            .shadow(color: Color("primaryPurple").opacity(0.2), radius: 15, x: 0, y: 5)
-    }
-}
-
-// Compact size selection popover with icons
-struct SizeSelectionPopover: View {
-    let grid: Grid
-    let onSave: (BentoSize) -> Void
-    let onCancel: () -> Void
-    
-    @State private var selectedSize: BentoSize
-    
-    init(grid: Grid, onSave: @escaping (BentoSize) -> Void, onCancel: @escaping () -> Void) {
-        self.grid = grid
-        self.onSave = onSave
-        self.onCancel = onCancel
-        
-        // Initialize with current size
-        if let sizeString = grid.size_ {
-            switch sizeString.lowercased() {
-            case "small":
-                _selectedSize = State(initialValue: .small)
-            case "large":
-                _selectedSize = State(initialValue: .large)
-            default:
-                _selectedSize = State(initialValue: .medium)
+            .shadow(color: backgroundColor.opacity(0.2), radius: 15, x: 0, y: 5)
+            .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.9, blendDuration: 0.25), value: width)
+            .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.9, blendDuration: 0.25), value: height)
+            .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.98)),
+                                    removal: .opacity))
+            .onChange(of: grid.size_ ?? "") { _ in
+                UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
             }
-        } else {
-            _selectedSize = State(initialValue: .medium)
-        }
-    }
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("Select Grid Size")
-                .font(.headline)
-                .padding(.top, 16)
-            
-            HStack(spacing: 20) {
-                SizeOptionButton(
-                    title: "Small",
-                    icon: "square",
-                    size: .small,
-                    isSelected: selectedSize == .small
-                ) {
-                    selectedSize = .small
-                }
-                
-                SizeOptionButton(
-                    title: "Medium",
-                    icon: "rectangle",
-                    size: .medium,
-                    isSelected: selectedSize == .medium
-                ) {
-                    selectedSize = .medium
-                }
-                
-                SizeOptionButton(
-                    title: "Large",
-                    icon: "rectangle.expand.vertical",
-                    size: .large,
-                    isSelected: selectedSize == .large
-                ) {
-                    selectedSize = .large
-                }
-            }
-            .padding(.horizontal, 16)
-            
-            HStack {
-                Button("Cancel") {
-                    onCancel()
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(Color.gray.opacity(0.2))
-                .cornerRadius(10)
-                
-                Spacer()
-                
-                Button("Save") {
-                    onSave(selectedSize)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(Color("primaryPurple"))
-                .foregroundColor(.white)
-                .cornerRadius(10)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-        }
-        .frame(width: 300)
-    }
-}
-
-struct SizeOptionButton: View {
-    let title: String
-    let icon: String
-    let size: BentoSize
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(isSelected ? Color("primaryPurple") : .gray)
-                    .frame(width: 40, height: 40)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(isSelected ? Color("primaryPurple").opacity(0.1) : Color.clear)
-                    )
-                
-                Text(title)
-                    .font(.caption)
-                    .foregroundColor(isSelected ? Color("primaryPurple") : .gray)
-            }
-        }
     }
 }

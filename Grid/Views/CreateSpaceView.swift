@@ -10,9 +10,11 @@ import CoreData
 
 struct CreateSpaceView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.dismiss) private var dismiss
     @State private var gridName = ""
     @State private var navigateToHome = false
-    
+    var navigateAfterCreate: Bool = true
+
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
@@ -104,7 +106,11 @@ struct CreateSpaceView: View {
             do {
                 try viewContext.save()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    navigateToHome = true
+                    if navigateAfterCreate {
+                        navigateToHome = true
+                    } else {
+                        dismiss()
+                    }
                 }
             } catch {
                 print("Error creating space: \(error)")

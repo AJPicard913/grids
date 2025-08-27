@@ -6,7 +6,7 @@ struct SpaceSelectorView: View {
     @Environment(\.managedObjectContext) private var viewContext
     let spaces: [Space]
     @Binding var selectedIndex: Int
-    @Binding var showingCreateGrid: Bool
+    @Binding var showingCreateSpace: Bool
     @State private var isEditMode = false
     @State private var spaceToDelete: Space?
     @State private var showingDeleteAlert = false
@@ -51,7 +51,7 @@ struct SpaceSelectorView: View {
                 if !isEditMode {
                     Section {
                         Button {
-                            showingCreateGrid = true; dismiss()
+                            showingCreateSpace = true; dismiss()
                         } label: {
                             HStack {
                                 Image(systemName: "plus.circle.fill").foregroundColor(Color("primaryPurple"))
