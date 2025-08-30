@@ -31,6 +31,16 @@ struct RichCreateGridView: View {
     @State private var showingInviteSheet = false
     @FocusState private var focusedBlockId: UUID?
 
+    init(space: Space, initialTitle: String? = nil, initialBlocks: [ContentBlock]? = nil) {
+        self.space = space
+        if let initialTitle {
+            _gridTitle = State(initialValue: initialTitle)
+        }
+        if let initialBlocks {
+            _contentBlocks = State(initialValue: initialBlocks)
+        }
+    }
+
     private var isSaveButtonEnabled: Bool {
         !gridTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }

@@ -22,6 +22,11 @@ struct HomeView: View {
     
     // Namespace for matched geometry animations
     @Namespace private var ns
+
+    @State private var showingQuickActions = false
+    @State private var showingTemplates = false
+    @State private var showPills = false
+    @State private var showingPrefilledTodo = false
     
     private var currentSpace: Space? {
         guard !spaces.isEmpty else { return nil }
@@ -260,8 +265,12 @@ struct HomeView: View {
                     customTabBar
                 }
             }
+            .blur(radius: showingQuickActions ? 12 : 0)
+            .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showingQuickActions)
         }
         .background(Color(UIColor.systemGroupedBackground))
+        .overlay(quickActionOverlay, alignment: .bottomTrailing)
+        .overlay(floatingActionButton, alignment: .bottomTrailing)
         .sheet(isPresented: $showingSpaceSelector) {
             SpaceSelectorView(spaces: Array(spaces), selectedIndex: $selectedSpaceIndex, showingCreateSpace: $showingCreateSpace)
         }
@@ -271,6 +280,14 @@ struct HomeView: View {
         .sheet(isPresented: $showingCreateItem) {
             if let space = currentSpace {
                 RichCreateGridView(space: space)
+            }
+        }
+        .sheet(isPresented: $showingTemplates) {
+            GridTemplatesView()
+        }
+        .sheet(isPresented: $showingPrefilledTodo) {
+            if let space = currentSpace {
+                RichCreateGridView(space: space, initialTitle: "To Do List", initialBlocks: todoTemplateBlocks)
             }
         }
         .onAppear {
@@ -404,18 +421,178 @@ struct HomeView: View {
             
             Spacer()
             
-            Button {
-                showingCreateItem = true
-            } label: {
+            Button { } label: {
                 Circle()
                     .fill(Color("primaryPurple"))
                     .frame(width: 44, height: 44)
-                    .overlay(Image(systemName: "plus").font(.title2).fontWeight(.semibold).foregroundColor(.white))
-                    .shadow(color: Color("primaryPurple").opacity(0.3), radius: 15, x: 0, y: 5)
             }
+            .opacity(0)
+            .allowsHitTesting(false)
         }
         .padding(.horizontal, 16)
         .animation(.spring(), value: selectedTab)
+    }
+
+    private var quickActionOverlay: some View {
+        Group {
+            if showingQuickActions || showPills {
+                ZStack(alignment: .bottomTrailing) {
+                    // Scrim tap to dismiss
+                    Color.black.opacity(0.15)
+                        .opacity(showPills ? 1 : 0)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            dismissQuickActions()
+                        }
+                        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showPills)
+
+                    // Floating menu (pills) aligned trailing with animated entrance/exit
+                    VStack(alignment: .trailing, spacing: 10) {
+                        // View Grid Templates
+                        Button {
+                            dismissQuickActions {
+                                showingTemplates = true
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(Color("primaryPurple"))
+                                    .font(.subheadline)
+                                Text("View Grid Templates")
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
+                        }
+                        .opacity(showPills ? 1 : 0)
+                        .offset(x: showPills ? 0 : 16, y: showPills ? 0 : 16)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.9).delay(0.02), value: showPills)
+                        
+                        Button {
+                            dismissQuickActions {
+                                // For now, same as Create Grid (we’ll refine later)
+                                showingCreateItem = true
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "calendar")
+                                    .foregroundColor(Color("primaryPurple"))
+                                    .font(.subheadline)
+                                Text("Grid Calendar")
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
+                        }
+                        .opacity(showPills ? 1 : 0)
+                        .offset(x: showPills ? 0 : 16, y: showPills ? 0 : 16)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.9).delay(0.06), value: showPills)
+                        
+                        Button {
+                            dismissQuickActions {
+                                // OPEN prefilled To-Do editor
+                                showingPrefilledTodo = true
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "checkmark.circle")
+                                    .foregroundColor(Color("primaryPurple"))
+                                    .font(.subheadline)
+                                Text("Grid To Do List")
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
+                        }
+                        .opacity(showPills ? 1 : 0)
+                        .offset(x: showPills ? 0 : 16, y: showPills ? 0 : 16)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.9).delay(0.10), value: showPills)
+                        
+                        Button {
+                            dismissQuickActions {
+                                showingCreateItem = true
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "plus.circle")
+                                    .foregroundColor(Color("primaryPurple"))
+                                    .font(.subheadline)
+                                Text("Blank Grid")
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
+                        }
+                        .opacity(showPills ? 1 : 0)
+                        .offset(x: showPills ? 0 : 16, y: showPills ? 0 : 16)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.9).delay(0.14), value: showPills)
+                    }
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 96)
+                }
+            }
+        }
+    }
+
+    private var floatingActionButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            if showingQuickActions {
+                dismissQuickActions()
+            } else {
+                openQuickActions()
+            }
+        } label: {
+            Circle()
+                .fill(Color("primaryPurple"))
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: showingQuickActions ? "xmark" : "plus")
+                        .font(.title3.weight(.semibold))
+                        .foregroundColor(.white)
+                        .rotationEffect(.degrees(showingQuickActions ? 180 : 0))
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showingQuickActions)
+                )
+                .shadow(color: Color("primaryPurple").opacity(0.3), radius: 15, x: 0, y: 5)
+        }
+        .padding(.trailing, 16)
+        .padding(.bottom, 16)
+        .accessibilityIdentifier("FloatingPlusButton")
+    }
+
+    private func openQuickActions() {
+        showingQuickActions = true
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                showPills = true
+            }
+        }
+    }
+
+    private func dismissQuickActions(completion: (() -> Void)? = nil) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+            showPills = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.44) {
+            showingQuickActions = false
+            completion?()
+        }
     }
 }
 
@@ -579,4 +756,24 @@ struct AdaptiveGridCard: View {
                 UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
             }
     }
+}
+
+private var todoTemplateBlocks: [ContentBlock] {
+    var blocks: [ContentBlock] = []
+    blocks.append(ContentBlock(type: .text, content: "House Tasks:"))
+    blocks.append(ContentBlock(type: .todo, content: "Deep clean"))
+    blocks.append(ContentBlock(type: .todo, content: "Repair damaged wall"))
+    blocks.append(ContentBlock(type: .todo, content: "Weed"))
+
+    blocks.append(ContentBlock(type: .text, content: ""))
+    blocks.append(ContentBlock(type: .text, content: "Kids Tasks:"))
+    blocks.append(ContentBlock(type: .todo, content: "Lorenzo Take the trash out"))
+    blocks.append(ContentBlock(type: .todo, content: "Gianni Clean up your room"))
+
+    blocks.append(ContentBlock(type: .text, content: "Back to School tasks:"))
+    blocks.append(ContentBlock(type: .todo, content: "Buy new backpacks"))
+    blocks.append(ContentBlock(type: .todo, content: "Buy new lunch boxes"))
+
+    blocks.append(ContentBlock(type: .text, content: "")) // trailing text block so user can continue typing
+    return blocks
 }
